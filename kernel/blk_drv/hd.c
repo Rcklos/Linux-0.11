@@ -81,22 +81,22 @@ int sys_setup(void * BIOS)
 	callable = 0;
 #ifndef HD_TYPE
 	for (drive=0 ; drive<2 ; drive++) {
-		hd_info[drive].cyl = *(unsigned short *) BIOS;
-		hd_info[drive].head = *(unsigned char *) (2+BIOS);
-		hd_info[drive].wpcom = *(unsigned short *) (5+BIOS);
+		hd_info[drive].cyl = *(unsigned short *) BIOS;			// 柱面数
+		hd_info[drive].head = *(unsigned char *) (2+BIOS);		// 磁头数
+		hd_info[drive].wpcom = *(unsigned short *) (5+BIOS);	
 		hd_info[drive].ctl = *(unsigned char *) (8+BIOS);
 		hd_info[drive].lzone = *(unsigned short *) (12+BIOS);
-		hd_info[drive].sect = *(unsigned char *) (14+BIOS);
+		hd_info[drive].sect = *(unsigned char *) (14+BIOS);		// 每个磁道扇区数
 		BIOS += 16;
 	}
-	if (hd_info[1].cyl)
+	if (hd_info[1].cyl)											// 硬盘数
 		NR_HD=2;
 	else
 		NR_HD=1;
 #endif
-	for (i=0 ; i<NR_HD ; i++) {
-		hd[i*5].start_sect = 0;
-		hd[i*5].nr_sects = hd_info[i].head*
+	for (i=0 ; i<NR_HD ; i++) {									// 遍历每个磁盘
+		hd[i*5].start_sect = 0;									// 起始扇区初始化
+		hd[i*5].nr_sects = hd_info[i].head*						// 计算扇区的数量
 				hd_info[i].sect*hd_info[i].cyl;
 	}
 
@@ -122,7 +122,7 @@ int sys_setup(void * BIOS)
 		
 	*/
 
-	if ((cmos_disks = CMOS_READ(0x12)) & 0xf0)
+	if ((cmos_disks = CMOS_READ(0x12)) & 0xf0)							// CMOS
 		if (cmos_disks & 0x0f)
 			NR_HD = 2;
 		else
@@ -133,28 +133,28 @@ int sys_setup(void * BIOS)
 		hd[i*5].start_sect = 0;
 		hd[i*5].nr_sects = 0;
 	}
-	for (drive=0 ; drive<NR_HD ; drive++) {
-		if (!(bh = bread(0x300 + drive*5,0))) {
+	for (drive=0 ; drive<NR_HD ; drive++) {								// 遍历磁盘
+		if (!(bh = bread(0x300 + drive*5,0))) {							// 读取第一块block，即分区表
 			printk("Unable to read partition table of drive %d\n\r",
 				drive);
 			panic("");
 		}
-		if (bh->b_data[510] != 0x55 || (unsigned char)
+		if (bh->b_data[510] != 0x55 || (unsigned char)					// 验证分区表
 		    bh->b_data[511] != 0xAA) {
 			printk("Bad partition table on drive %d\n\r",drive);
 			panic("");
 		}
-		p = 0x1BE + (void *)bh->b_data;
+		p = 0x1BE + (void *)bh->b_data;									// 开始初始化磁盘记录
 		for (i=1;i<5;i++,p++) {
 			hd[i+5*drive].start_sect = p->start_sect;
 			hd[i+5*drive].nr_sects = p->nr_sects;
 		}
-		brelse(bh);
+		brelse(bh);														// 释放缓存
 	}
-	if (NR_HD)
+	if (NR_HD)															// 如果磁盘读取成功，输出到屏幕
 		printk("Partition table%s ok.\n\r",(NR_HD>1)?"s":"");
-	rd_load();
-	mount_root();
+	rd_load();															// 从软盘加载根设备
+	mount_root();														// 挂载根
 	return (0);
 }
 
@@ -342,8 +342,8 @@ void do_hd_request(void)
 
 void hd_init(void)
 {
-	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;
-	set_intr_gate(0x2E,&hd_interrupt);
-	outb_p(inb_p(0x21)&0xfb,0x21);
-	outb(inb_p(0xA1)&0xbf,0xA1);
+	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;	// 挂载设备请求
+	set_intr_gate(0x2E,&hd_interrupt);				// 设置硬盘中断
+	outb_p(inb_p(0x21)&0xfb,0x21);					// 允许A259A发出中断请求
+	outb(inb_p(0xA1)&0xbf,0xA1);					// 允许硬盘发送中断请求
 }

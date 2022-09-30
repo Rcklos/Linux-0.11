@@ -389,10 +389,10 @@ void sched_init(void)
 
 	if (sizeof(struct sigaction) != 16)
 		panic("Struct sigaction MUST be 16 bytes");
-	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));
-	set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt));
-	p = gdt+2+FIRST_TSS_ENTRY;
-	for(i=1;i<NR_TASKS;i++) {
+	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss)); // 设置TSS
+	set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt)); // 设置LDT
+	p = gdt+2+FIRST_TSS_ENTRY;								 // 获取TSS		
+	for(i=1;i<NR_TASKS;i++) { // 遍历2^6个任务，但要清空除了0之外的任务						
 		task[i] = NULL;
 		p->a=p->b=0;
 		p++;
@@ -400,13 +400,14 @@ void sched_init(void)
 		p++;
 	}
 /* Clear NT, so that we won't have troubles with that later on */
-	__asm__("pushfl ; andl $0xffffbfff,(%esp) ; popfl");
-	ltr(0);
-	lldt(0);
+	__asm__("pushfl ; andl $0xffffbfff,(%esp) ; popfl"); // 清空NT
+	ltr(0);		// 挂载TSS到TR寄存器
+	lldt(0);	// 挂载LDTR寄存器
+	// 设置定时器模式、以及设置高低位组成一个周期
 	outb_p(0x36,0x43);		/* binary, mode 3, LSB/MSB, ch 0 */
 	outb_p(LATCH & 0xff , 0x40);	/* LSB */
-	outb(LATCH >> 8 , 0x40);	/* MSB */
-	set_intr_gate(0x20,&timer_interrupt);
-	outb(inb_p(0x21)&~0x01,0x21);
-	set_system_gate(0x80,&system_call);
+	outb(LATCH >> 8 , 0x40);	/* MSB */	
+	set_intr_gate(0x20,&timer_interrupt); 	// 开启定时器中断
+	outb(inb_p(0x21)&~0x01,0x21);			// 允许时钟中断
+	set_system_gate(0x80,&system_call);		// 设置系统调用的入口
 }

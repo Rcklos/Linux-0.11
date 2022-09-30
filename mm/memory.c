@@ -40,10 +40,10 @@ static inline void oom(void)
 __asm__("movl %%eax,%%cr3"::"a" (0))
 
 /* these are not to be changed without changing head.s etc */
-#define LOW_MEM 0x100000
-#define PAGING_MEMORY (15*1024*1024)
-#define PAGING_PAGES (PAGING_MEMORY>>12)
-#define MAP_NR(addr) (((addr)-LOW_MEM)>>12)
+#define LOW_MEM 0x100000									// 2^(20) = 1MB
+#define PAGING_MEMORY (15*1024*1024)						// 15MB
+#define PAGING_PAGES (PAGING_MEMORY>>12) 					// 2^12B = 4KB
+#define MAP_NR(addr) (((addr)-LOW_MEM)>>12)					// 映射地址
 #define USED 100
 
 #define CODE_SPACE(addr) ((((addr)+4095)&~4095) < \
@@ -401,13 +401,13 @@ void mem_init(long start_mem, long end_mem)
 {
 	int i;
 
-	HIGH_MEMORY = end_mem;
-	for (i=0 ; i<PAGING_PAGES ; i++)
-		mem_map[i] = USED;
-	i = MAP_NR(start_mem);
-	end_mem -= start_mem;
-	end_mem >>= 12;
-	while (end_mem-->0)
+	HIGH_MEMORY = end_mem;				// 高位内存就是内存最后的地址
+	for (i=0 ; i<PAGING_PAGES ; i++)	// PAGEING_PAGES = 15MB/4KB
+		mem_map[i] = USED;				// 使用映射
+	i = MAP_NR(start_mem);				// 求映射后的实际地址
+	end_mem -= start_mem;				// 求内存大小
+	end_mem >>= 12;						// 求内存页数量
+	while (end_mem-->0)					// 初始化每一页的映射情况
 		mem_map[i++]=0;
 }
 

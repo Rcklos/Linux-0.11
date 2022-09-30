@@ -66,21 +66,21 @@ static void add_request(struct blk_dev_struct * dev, struct request * req)
 	struct request * tmp;
 
 	req->next = NULL;
-	cli();
+	cli();									// 玄学
 	if (req->bh)
-		req->bh->b_dirt = 0;
-	if (!(tmp = dev->current_request)) {
-		dev->current_request = req;
-		sti();
-		(dev->request_fn)();
+		req->bh->b_dirt = 0;				// 重置缓存
+	if (!(tmp = dev->current_request)) {	// 如果当前设备没有req，那么赋予给他
+		dev->current_request = req;			
+		sti();								// 开中断
+		(dev->request_fn)();				// 调用设备请求函数，触发到内核态
 		return;
 	}
-	for ( ; tmp->next ; tmp=tmp->next)
+	for ( ; tmp->next ; tmp=tmp->next)		// 电梯算法，磁头移动距离最小
 		if ((IN_ORDER(tmp,req) || 
 		    !IN_ORDER(tmp,tmp->next)) &&
 		    IN_ORDER(req,tmp->next))
 			break;
-	req->next=tmp->next;
+	req->next=tmp->next;					// 挂接请求项队列，从挂接成头
 	tmp->next=req;
 	sti();
 }
@@ -92,7 +92,7 @@ static void make_request(int major,int rw, struct buffer_head * bh)
 
 /* WRITEA/READA is special case - it is not really needed, so if the */
 /* buffer is locked, we just forget about it, else it's a normal read */
-	if ((rw_ahead = (rw == READA || rw == WRITEA))) {
+	if ((rw_ahead = (rw == READA || rw == WRITEA))) {		// 互斥锁
 		if (bh->b_lock)
 			return;
 		if (rw == READA)
@@ -100,10 +100,11 @@ static void make_request(int major,int rw, struct buffer_head * bh)
 		else
 			rw = WRITE;
 	}
-	if (rw!=READ && rw!=WRITE)
+	if (rw!=READ && rw!=WRITE)								// 不是读写操作的，搞个JB
 		panic("Bad block dev command, must be R/W/RA/WA");
-	lock_buffer(bh);
+	lock_buffer(bh);										// 锁定缓存
 	if ((rw == WRITE && !bh->b_dirt) || (rw == READ && bh->b_uptodate)) {
+		// 满足写时非脏或读时未更新则放开锁
 		unlock_buffer(bh);
 		return;
 	}
@@ -113,14 +114,14 @@ repeat:
  * of the requests are only for reads.
  */
 	if (rw == READ)
-		req = request+NR_REQUEST;
+		req = request+NR_REQUEST;								// 读操作
 	else
-		req = request+((NR_REQUEST*2)/3);
+		req = request+((NR_REQUEST*2)/3);						// 写操作
 /* find an empty request */
-	while (--req >= request)
+	while (--req >= request)									// 找到空req
 		if (req->dev<0)
 			break;
-/* if none found, sleep on new requests: check for rw_ahead */
+/* if none found, sleep on new requests: check for rw_ahead */	// 如果找不到。检查读写
 	if (req < request) {
 		if (rw_ahead) {
 			unlock_buffer(bh);
@@ -129,7 +130,7 @@ repeat:
 		sleep_on(&wait_for_request);
 		goto repeat;
 	}
-/* fill up the request-info, and add it to the queue */
+/* fill up the request-info, and add it to the queue */			// 填充req信息并入队
 	req->dev = bh->b_dev;
 	req->cmd = rw;
 	req->errors=0;
@@ -146,12 +147,12 @@ void ll_rw_block(int rw, struct buffer_head * bh)
 {
 	unsigned int major;
 
-	if ((major=MAJOR(bh->b_dev)) >= NR_BLK_DEV ||
-	!(blk_dev[major].request_fn)) {
-		printk("Trying to read nonexistent block-device\n\r");
+	if ((major=MAJOR(bh->b_dev)) >= NR_BLK_DEV ||				// 如果主设备号大于设备数
+	!(blk_dev[major].request_fn)) {								// 或者主设备号没有请求函数
+		printk("Trying to read nonexistent block-device\n\r");	// 判定设备不存在
 		return;
 	}
-	make_request(major,rw,bh);
+	make_request(major,rw,bh);									// 请求设备
 }
 
 void blk_dev_init(void)

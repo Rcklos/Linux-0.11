@@ -134,25 +134,25 @@ void check_disk_change(int dev)
 static inline void remove_from_queues(struct buffer_head * bh)
 {
 /* remove from hash-queue */
-	if (bh->b_next)
+	if (bh->b_next)											// 如果bh不是队尾，则断裂后继
 		bh->b_next->b_prev = bh->b_prev;
-	if (bh->b_prev)
+	if (bh->b_prev)											// 如果bh不是队首，则断裂前驱
 		bh->b_prev->b_next = bh->b_next;
-	if (hash(bh->b_dev,bh->b_blocknr) == bh)
+	if (hash(bh->b_dev,bh->b_blocknr) == bh)				// hash留给下一个有缘人
 		hash(bh->b_dev,bh->b_blocknr) = bh->b_next;
 /* remove from free list */
-	if (!(bh->b_prev_free) || !(bh->b_next_free))
-		panic("Free block list corrupted");
-	bh->b_prev_free->b_next_free = bh->b_next_free;
+	if (!(bh->b_prev_free) || !(bh->b_next_free))			// free前驱后继都完蛋了，则是单节点
+		panic("Free block list corrupted");	
+	bh->b_prev_free->b_next_free = bh->b_next_free;			// 断裂free前驱后继
 	bh->b_next_free->b_prev_free = bh->b_prev_free;
-	if (free_list == bh)
+	if (free_list == bh)									// 去首
 		free_list = bh->b_next_free;
 }
 
 static inline void insert_into_queues(struct buffer_head * bh)
 {
 /* put at end of free list */
-	bh->b_next_free = free_list;
+	bh->b_next_free = free_list;							// 正常的入队，参考上面的出队
 	bh->b_prev_free = free_list->b_prev_free;
 	free_list->b_prev_free->b_next_free = bh;
 	free_list->b_prev_free = bh;
@@ -205,26 +205,26 @@ struct buffer_head * get_hash_table(int dev, int block)
  *
  * The algoritm is changed: hopefully better, and an elusive bug removed.
  */
-#define BADNESS(bh) (((bh)->b_dirt<<1)+(bh)->b_lock)
+#define BADNESS(bh) (((bh)->b_dirt<<1)+(bh)->b_lock) 	// 脏的 > 锁定的 > 白板
 struct buffer_head * getblk(int dev,int block)
 {
 	struct buffer_head * tmp, * bh;
 
 repeat:
-	if ((bh = get_hash_table(dev,block)))
-		return bh;
-	tmp = free_list;
-	do {
+	if ((bh = get_hash_table(dev,block)))				// 查看缓存
+		return bh;										// 已缓存就立刻返回
+	tmp = free_list;									// 获取空闲缓存列表
+	do {												// 循环判断计数，未使用就是0
 		if (tmp->b_count)
 			continue;
-		if (!bh || BADNESS(tmp)<BADNESS(bh)) {
+		if (!bh || BADNESS(tmp)<BADNESS(bh)) {			// 遍历找到可用的
 			bh = tmp;
-			if (!BADNESS(tmp))
+			if (!BADNESS(tmp))							// 如果是白板，就差不多找对了
 				break;
 		}
 /* and repeat until we find something good */
 	} while ((tmp = tmp->b_next_free) != free_list);
-	if (!bh) {
+	if (!bh) {											// 等待缓存
 		sleep_on(&buffer_wait);
 		goto repeat;
 	}
@@ -271,16 +271,16 @@ struct buffer_head * bread(int dev,int block)
 {
 	struct buffer_head * bh;
 
-	if (!(bh=getblk(dev,block)))
-		panic("bread: getblk returned NULL\n");
-	if (bh->b_uptodate)
+	if (!(bh=getblk(dev,block)))				// 读取磁盘的一块数据
+		panic("bread: getblk returned NULL\n");	
+	if (bh->b_uptodate)							// 判断是否已被使用
 		return bh;
-	ll_rw_block(READ,bh);
-	wait_on_buffer(bh);
-	if (bh->b_uptodate)
+	ll_rw_block(READ,bh);						// 挂接缓冲块和请求项
+	wait_on_buffer(bh);							// 阻塞等待缓存本块内存
+	if (bh->b_uptodate)							// 再次判断是否可用
 		return bh;
-	brelse(bh);
-	return NULL;
+	brelse(bh);									// 读取失败释放缓存
+	return NULL;								// 返回NULL表示读取失败
 }
 
 #define COPYBLK(from,to) \
@@ -355,10 +355,10 @@ void buffer_init(long buffer_end)
 	int i;
 
 	if (buffer_end == 1<<20)
-		b = (void *) (640*1024);
+		b = (void *) (640*1024);	// 如果缓存末端是1MB，	那缓冲区只有640K
 	else
-		b = (void *) buffer_end;
-	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) {
+		b = (void *) buffer_end;	// 如果大于，那么则吃遍缓冲区
+	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) { // 划分缓冲块和head
 		h->b_dev = 0;
 		h->b_dirt = 0;
 		h->b_count = 0;
@@ -376,9 +376,9 @@ void buffer_init(long buffer_end)
 			b = (void *) 0xA0000;
 	}
 	h--;
-	free_list = start_buffer;
-	free_list->b_prev_free = h;
-	h->b_next_free = free_list;
-	for (i=0;i<NR_HASH;i++)
+	free_list = start_buffer;	 	// 管理head
+	free_list->b_prev_free = h;	 	// 表头指向表尾，组成环形链表
+	h->b_next_free = free_list;		// 组成双向链表
+	for (i=0;i<NR_HASH;i++)			// 初始化hash_table
 		hash_table[i]=NULL;
 }	

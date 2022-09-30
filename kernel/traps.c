@@ -182,23 +182,23 @@ void trap_init(void)
 {
 	int i;
 
-	set_trap_gate(0,&divide_error);
-	set_trap_gate(1,&debug);
-	set_trap_gate(2,&nmi);
+	set_trap_gate(0,&divide_error);				// 除法(n/0)错误
+	set_trap_gate(1,&debug);					// 单步调试
+	set_trap_gate(2,&nmi);						// 不可屏蔽中断
 	set_system_gate(3,&int3);	/* int3-5 can be called from all */
-	set_system_gate(4,&overflow);
-	set_system_gate(5,&bounds);
-	set_trap_gate(6,&invalid_op);
-	set_trap_gate(7,&device_not_available);
-	set_trap_gate(8,&double_fault);
-	set_trap_gate(9,&coprocessor_segment_overrun);
-	set_trap_gate(10,&invalid_TSS);
-	set_trap_gate(11,&segment_not_present);
-	set_trap_gate(12,&stack_segment);
-	set_trap_gate(13,&general_protection);
-	set_trap_gate(14,&page_fault);
-	set_trap_gate(15,&reserved);
-	set_trap_gate(16,&coprocessor_error);
+	set_system_gate(4,&overflow);				// 溢出
+	set_system_gate(5,&bounds);					// 超出边界
+	set_trap_gate(6,&invalid_op);				// 非法操作
+	set_trap_gate(7,&device_not_available);		// 设备不可用
+	set_trap_gate(8,&double_fault);				// 双故障
+	set_trap_gate(9,&coprocessor_segment_overrun);	// 协处理器段越界
+	set_trap_gate(10,&invalid_TSS);				// 无效TSS
+	set_trap_gate(11,&segment_not_present);		// 段不存在
+	set_trap_gate(12,&stack_segment);			// 栈溢出
+	set_trap_gate(13,&general_protection);		// 一般性保护
+	set_trap_gate(14,&page_fault);				// 页错误，缺页
+	set_trap_gate(15,&reserved);				// 保留
+	set_trap_gate(16,&coprocessor_error);		// 协处理器错误
 	for (i=17;i<48;i++)
 		set_trap_gate(i,&reserved);
 	set_trap_gate(45,&irq13);

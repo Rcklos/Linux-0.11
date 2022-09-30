@@ -244,37 +244,37 @@ void mount_root(void)
 	int i,free;
 	struct super_block * p;
 	struct m_inode * mi;
-
-	if (32 != sizeof (struct d_inode))
+																	// 文件系统用inode管理
+	if (32 != sizeof (struct d_inode))								// inode长度必须是32B
 		panic("bad i-node size");
-	for(i=0;i<NR_FILE;i++)
-		file_table[i].f_count=0;
-	if (MAJOR(ROOT_DEV) == 2) {
-		printk("Insert root floppy and press ENTER");
-		wait_for_keypress();
+	for(i=0;i<NR_FILE;i++)											// 遍历所有目录(NR_FILE = 64)
+		file_table[i].f_count=0;									// 初始化目录文件数量为0
+	if (MAJOR(ROOT_DEV) == 2) {										// 如果根设备还是软盘，则选择软盘加载
+		printk("Insert root floppy and press ENTER");				// 不过rd_load会构造虚拟盘
+		wait_for_keypress();										// 所以ROOT_DEV = 1
 	}
-	for(p = &super_block[0] ; p < &super_block[NR_SUPER] ; p++) {
+	for(p = &super_block[0] ; p < &super_block[NR_SUPER] ; p++) {	// 初始化超级块(NR_SUPER = 8)
 		p->s_dev = 0;
 		p->s_lock = 0;
 		p->s_wait = NULL;
 	}
-	if (!(p=read_super(ROOT_DEV)))
+	if (!(p=read_super(ROOT_DEV)))									// 把ROOT_DEV数据读取到超级块上
 		panic("Unable to mount root");
-	if (!(mi=iget(ROOT_DEV,ROOT_INO)))
+	if (!(mi=iget(ROOT_DEV,ROOT_INO)))								// 试着读取一下ROOT的超级块，没有就寄
 		panic("Unable to read root i-node");
 	mi->i_count += 3 ;	/* NOTE! it is logically used 4 times, not 1 */
 	p->s_isup = p->s_imount = mi;
-	current->pwd = mi;
-	current->root = mi;
+	current->pwd = mi;												// 重定向pwd到根节点
+	current->root = mi;												// 重定向root到根节点
 	free=0;
 	i=p->s_nzones;
-	while (-- i >= 0)
+	while (-- i >= 0)												// 初始化逻辑块位图
 		if (!set_bit(i&8191,p->s_zmap[i>>13]->b_data))
 			free++;
 	printk("%d/%d free blocks\n\r",free,p->s_nzones);
 	free=0;
 	i=p->s_ninodes+1;
-	while (-- i >= 0)
+	while (-- i >= 0)												// 初始化inode位图
 		if (!set_bit(i&8191,p->s_imap[i>>13]->b_data))
 			free++;
 	printk("%d/%d free inodes\n\r",free,p->s_ninodes);
