@@ -172,18 +172,18 @@ static char * envp[] = { "HOME=/usr/root", NULL };
 
 void init(void)
 {
-	int pid,i;								// 获取PID
+	int pid,i;								// pid用于fork
 
 	setup((void *) &drive_info);			// 配置系统，包括磁盘、文件系统
-	(void) open("/dev/tty0",O_RDWR,0);		
-	(void) dup(0);							
-	(void) dup(0);
+	(void) open("/dev/tty0",O_RDWR,0);		// 打开tty文件，此时是标准输入设备文件
+	(void) dup(0);							// 从tty复制句柄，打开标准输出设备文件
+	(void) dup(0);							// 继续复制句柄，打开标准错误输出设备
 	printf("%d buffers = %d bytes buffer space\n\r",NR_BUFFERS,
 		NR_BUFFERS*BLOCK_SIZE);
 	printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);
-	if (!(pid=fork())) {
-		close(0);
-		if (open("/etc/rc",O_RDONLY,0))
+	if (!(pid=fork())) {					// 到这里就要启动进程2了
+		close(0);							
+		if (open("/etc/rc",O_RDONLY,0))		
 			_exit(1);
 		execve("/bin/sh",argv_rc,envp_rc);
 		_exit(2);

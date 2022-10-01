@@ -135,34 +135,34 @@ int sys_chown(const char * filename,int uid,int gid)
 	return 0;
 }
 
-int sys_open(const char * filename,int flag,int mode)
+int sys_open(const char * filename,int flag,int mode)			// open系统调用处理函数
 {
 	struct m_inode * inode;
 	struct file * f;
 	int i,fd;
 
-	mode &= 0777 & ~current->umask;
-	for(fd=0 ; fd<NR_OPEN ; fd++)
+	mode &= 0777 & ~current->umask;								// 文件权限(类型)
+	for(fd=0 ; fd<NR_OPEN ; fd++)								// 遍历NR_OPEN，找到空闲项
 		if (!current->filp[fd])
 			break;
-	if (fd>=NR_OPEN)
+	if (fd>=NR_OPEN)											// 找不到空闲项就是open失败
 		return -EINVAL;
-	current->close_on_exec &= ~(1<<fd);
+	current->close_on_exec &= ~(1<<fd);							// 当前进程关闭，也会随之关闭fd
 	f=0+file_table;
-	for (i=0 ; i<NR_FILE ; i++,f++)
+	for (i=0 ; i<NR_FILE ; i++,f++)								// 找到空闲的file_table
 		if (!f->f_count) break;
-	if (i>=NR_FILE)
+	if (i>=NR_FILE)												// 找不到就是失败
 		return -EINVAL;
-	(current->filp[fd]=f)->f_count++;
-	if ((i=open_namei(filename,flag,mode,&inode))<0) {
-		current->filp[fd]=NULL;
+	(current->filp[fd]=f)->f_count++;							// file_table缓存文件描述符
+	if ((i=open_namei(filename,flag,mode,&inode))<0) {			// 根据filename找到对应的文件inode
+		current->filp[fd]=NULL;									// 找不到就寄了，释放资源然后溜了溜了
 		f->f_count=0;
 		return i;
 	}
-/* ttys are somewhat special (ttyxx major==4, tty major==5) */
-	if (S_ISCHR(inode->i_mode)) {
-		if (MAJOR(inode->i_zone[0])==4) {
-			if (current->leader && current->tty<0) {
+/* ttys are somewhat special (ttyxx major==4, tty major==5) */	
+	if (S_ISCHR(inode->i_mode)) {								// 判断是否字符设备文件
+		if (MAJOR(inode->i_zone[0])==4) {						// 如果设备号是4
+			if (current->leader && current->tty<0) {			// 设置当前进程的tty为改结点的子设备号
 				current->tty = MINOR(inode->i_zone[0]);
 				tty_table[current->tty].pgrp = current->pgrp;
 			}
@@ -177,12 +177,12 @@ int sys_open(const char * filename,int flag,int mode)
 /* Likewise with block-devices: check for floppy_change */
 	if (S_ISBLK(inode->i_mode))
 		check_disk_change(inode->i_zone[0]);
-	f->f_mode = inode->i_mode;
+	f->f_mode = inode->i_mode;									// 初始化文件
 	f->f_flags = flag;
 	f->f_count = 1;
 	f->f_inode = inode;
 	f->f_pos = 0;
-	return (fd);
+	return (fd);												// fd表项已经绑定了file，直接返回描述符即可
 }
 
 int sys_creat(const char * pathname, int mode)

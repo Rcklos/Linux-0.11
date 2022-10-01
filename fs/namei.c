@@ -97,7 +97,7 @@ static struct buffer_head * find_entry(struct m_inode ** dir,
 	struct dir_entry * de;
 	struct super_block * sb;
 
-#ifdef NO_TRUNCATE
+#ifdef NO_TRUNCATE												// 条件编译整特殊情况，我们不管，下面也不管了
 	if (namelen > NAME_LEN)
 		return NULL;
 #else
@@ -225,7 +225,7 @@ static struct buffer_head * add_entry(struct m_inode * dir,
  * Getdir traverses the pathname until it hits the topmost directory.
  * It returns NULL on failure.
  */
-static struct m_inode * get_dir(const char * pathname)
+static struct m_inode * get_dir(const char * pathname)		// 遍历路径名，直到最顶层(枝梢)的目录inode再返回
 {
 	char c;
 	const char * thisname;
@@ -234,37 +234,37 @@ static struct m_inode * get_dir(const char * pathname)
 	int namelen,inr,idev;
 	struct dir_entry * de;
 
-	if (!current->root || !current->root->i_count)
+	if (!current->root || !current->root->i_count)			// 如果当前进程没有挂载根目录就寄了
 		panic("No root inode");
-	if (!current->pwd || !current->pwd->i_count)
+	if (!current->pwd || !current->pwd->i_count)			// 如果当前进程没有挂载工作目录也得给我寄
 		panic("No cwd inode");
-	if ((c=get_fs_byte(pathname))=='/') {
+	if ((c=get_fs_byte(pathname))=='/') {					// 如果路径开头就是'/'，则表示起点是根目录
 		inode = current->root;
 		pathname++;
 	} else if (c)
-		inode = current->pwd;
+		inode = current->pwd;								// 如果路径开头不是'/'，则起点目录是当前目录
 	else
-		return NULL;	/* empty name is bad */
-	inode->i_count++;
+		return NULL;	/* empty name is bad */				// 空路径违法
+	inode->i_count++;										// 增加引用
 	while (1) {
-		thisname = pathname;
-		if (!S_ISDIR(inode->i_mode) || !permission(inode,MAY_EXEC)) {
+		thisname = pathname;								// 开始遍历
+		if (!S_ISDIR(inode->i_mode) || !permission(inode,MAY_EXEC)) {	// 判断是否为目录节点及权限检查
 			iput(inode);
 			return NULL;
 		}
-		for(namelen=0;(c=get_fs_byte(pathname++))&&(c!='/');namelen++)
+		for(namelen=0;(c=get_fs_byte(pathname++))&&(c!='/');namelen++)	// 遍历路径字符串找到本次遍历的路径
 			/* nothing */ ;
-		if (!c)
+		if (!c)															// 路径字符串遍历结束则跳出本函数并返回最顶层目录
 			return inode;
-		if (!(bh = find_entry(&inode,thisname,namelen,&de))) {
+		if (!(bh = find_entry(&inode,thisname,namelen,&de))) {			// 遍历过程中如果找不到当前inode结点，则表示路径错误
 			iput(inode);
 			return NULL;
 		}
-		inr = de->inode;
-		idev = inode->i_dev;
-		brelse(bh);
-		iput(inode);
-		if (!(inode = iget(idev,inr)))
+		inr = de->inode;												// 获取de的结点
+		idev = inode->i_dev;											// 获取inode所挂载的设备
+		brelse(bh);														// 释放block head引用
+		iput(inode);													// 释放inode
+		if (!(inode = iget(idev,inr)))									// 循环释放资源，也就是原路返回
 			return NULL;
 	}
 }
@@ -276,21 +276,21 @@ static struct m_inode * get_dir(const char * pathname)
  * specified name, and the name within that directory.
  */
 static struct m_inode * dir_namei(const char * pathname,
-	int * namelen, const char ** name)
+	int * namelen, const char ** name)			// 返回特定文件的目录inode
 {
 	char c;
 	const char * basename;
 	struct m_inode * dir;
 
-	if (!(dir = get_dir(pathname)))
+	if (!(dir = get_dir(pathname)))				// 调用get_dir获取枝梢目录inode
 		return NULL;
-	basename = pathname;
-	while ((c=get_fs_byte(pathname++)))
+	basename = pathname;						// 在get_dir遍历过程中，pathname已经变成文件名了
+	while ((c=get_fs_byte(pathname++)))			// 检查文件名合法性，一般情况下应该已经不会再出现'/'了
 		if (c=='/')
 			basename=pathname;
-	*namelen = pathname-basename-1;
-	*name = basename;
-	return dir;
+	*namelen = pathname-basename-1;				// 返回文件名长度
+	*name = basename;							// 返回文件名
+	return dir;									// 返回枝梢目录inode
 }
 
 /*
@@ -343,13 +343,13 @@ int open_namei(const char * pathname, int flag, int mode,
 	struct buffer_head * bh;
 	struct dir_entry * de;
 
-	if ((flag & O_TRUNC) && !(flag & O_ACCMODE))
+	if ((flag & O_TRUNC) && !(flag & O_ACCMODE))				
 		flag |= O_WRONLY;
 	mode &= 0777 & ~current->umask;
 	mode |= I_REGULAR;
-	if (!(dir = dir_namei(pathname,&namelen,&basename)))
+	if (!(dir = dir_namei(pathname,&namelen,&basename)))		// 获取枝梢目录及文件名
 		return -ENOENT;
-	if (!namelen) {			/* special case: '/usr/' etc */
+	if (!namelen) {			/* special case: '/usr/' etc */		// 如果获取不到文件名，大概率路径有问题
 		if (!(flag & (O_ACCMODE|O_CREAT|O_TRUNC))) {
 			*res_inode=dir;
 			return 0;
@@ -357,41 +357,42 @@ int open_namei(const char * pathname, int flag, int mode,
 		iput(dir);
 		return -EISDIR;
 	}
-	bh = find_entry(&dir,basename,namelen,&de);
-	if (!bh) {
+	bh = find_entry(&dir,basename,namelen,&de);					// 通过枝梢目录，查找文件entry
+	if (!bh) {													// 如果找不到，那就是文件不存在，需要新建一个
 		if (!(flag & O_CREAT)) {
 			iput(dir);
 			return -ENOENT;
 		}
-		if (!permission(dir,MAY_WRITE)) {
+		if (!permission(dir,MAY_WRITE)) {						// 没写权限则不再继续开辟新文件
 			iput(dir);
 			return -EACCES;
 		}
-		inode = new_inode(dir->i_dev);
-		if (!inode) {
+		inode = new_inode(dir->i_dev);							// 搞出一个inode
+		if (!inode) {											// 搞不出来办不了事
 			iput(dir);
 			return -ENOSPC;
 		}
-		inode->i_uid = current->euid;
-		inode->i_mode = mode;
-		inode->i_dirt = 1;
-		bh = add_entry(dir,basename,namelen,&de);
-		if (!bh) {
+		inode->i_uid = current->euid;							// uid，参考linux用户管理
+		inode->i_mode = mode;									// 这里是在操作文件的时候需要用到的权限
+		inode->i_dirt = 1;										// 确定可用
+		// adds a file entry to the specified directory
+		bh = add_entry(dir,basename,namelen,&de);				// 把文件添加到指定目录(de)中
+		if (!bh) {												// 添加失败就没咯！
 			inode->i_nlinks--;
 			iput(inode);
 			iput(dir);
 			return -ENOSPC;
 		}
 		de->inode = inode->i_num;
-		bh->b_dirt = 1;
+		bh->b_dirt = 1;	
 		brelse(bh);
 		iput(dir);
-		*res_inode = inode;
+		*res_inode = inode;										// 这个时候就可以直接返回文件的inode了
 		return 0;
 	}
-	inr = de->inode;
-	dev = dir->i_dev;
-	brelse(bh);
+	inr = de->inode;											// 读取枝梢inode
+	dev = dir->i_dev;											// 读取枝梢的设备号
+	brelse(bh);													// 减少引用
 	iput(dir);
 	if (flag & O_EXCL)
 		return -EEXIST;
@@ -405,7 +406,7 @@ int open_namei(const char * pathname, int flag, int mode,
 	inode->i_atime = CURRENT_TIME;
 	if (flag & O_TRUNC)
 		truncate(inode);
-	*res_inode = inode;
+	*res_inode = inode;											// 过五关斩六将也得返回文件的inode
 	return 0;
 }
 
