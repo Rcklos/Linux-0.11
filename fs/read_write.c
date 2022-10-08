@@ -52,24 +52,24 @@ int sys_lseek(unsigned int fd,off_t offset, int origin)
 	return file->f_pos;
 }
 
-int sys_read(unsigned int fd,char * buf,int count)
-{
+int sys_read(unsigned int fd,char * buf,int count)						// 读取文件
+{				// 文件描述符			缓冲区			读取字节数
 	struct file * file;
 	struct m_inode * inode;
 
-	if (fd>=NR_OPEN || count<0 || !(file=current->filp[fd]))
+	if (fd>=NR_OPEN || count<0 || !(file=current->filp[fd]))			// 没办法打开新文件就返回
 		return -EINVAL;
-	if (!count)
+	if (!count)															// count = 0 就是完全不需要读取
 		return 0;
-	verify_area(buf,count);
-	inode = file->f_inode;
-	if (inode->i_pipe)
+	verify_area(buf,count);												// 验证缓冲区
+	inode = file->f_inode;												// 获取inode
+	if (inode->i_pipe)													// 如果没有输入pipe就结束了
 		return (file->f_mode&1)?read_pipe(inode,buf,count):-EIO;
-	if (S_ISCHR(inode->i_mode))
-		return rw_char(READ,inode->i_zone[0],buf,count,&file->f_pos);
+	if (S_ISCHR(inode->i_mode))											// 判断是否字符设备
+		return rw_char(READ,inode->i_zone[0],buf,count,&file->f_pos);	// 字符设备就得用字符设备读
 	if (S_ISBLK(inode->i_mode))
-		return block_read(inode->i_zone[0],&file->f_pos,buf,count);
-	if (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)) {
+		return block_read(inode->i_zone[0],&file->f_pos,buf,count);		// 块设备的读
+	if (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode)) {				// 文件读
 		if (count+file->f_pos > inode->i_size)
 			count = inode->i_size - file->f_pos;
 		if (count<=0)

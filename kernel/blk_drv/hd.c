@@ -154,7 +154,7 @@ int sys_setup(void * BIOS)
 	if (NR_HD)															// 如果磁盘读取成功，输出到屏幕
 		printk("Partition table%s ok.\n\r",(NR_HD>1)?"s":"");
 	rd_load();															// 从软盘加载根设备
-	mount_root();														// 挂载根
+	mount_root();														// 加载挂载根
 	return (0);
 }
 

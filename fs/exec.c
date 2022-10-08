@@ -179,7 +179,7 @@ static unsigned long change_ldt(unsigned long text_size,unsigned long * page)
 /*
  * 'do_execve()' executes a new program.
  */
-int do_execve(unsigned long * eip,long tmp,char * filename,
+int do_execve(unsigned long * eip,long tmp,char * filename,					// 执行程序的回调
 	char ** argv, char ** envp)
 {
 	struct m_inode * inode;
@@ -192,21 +192,21 @@ int do_execve(unsigned long * eip,long tmp,char * filename,
 	int sh_bang = 0;
 	unsigned long p=PAGE_SIZE*MAX_ARG_PAGES-4;
 
-	if ((0xffff & eip[1]) != 0x000f)
+	if ((0xffff & eip[1]) != 0x000f)										// 检查特权级别，判断是否调用本函数
 		panic("execve called from supervisor mode");
-	for (i=0 ; i<MAX_ARG_PAGES ; i++)	/* clear page-table */
+	for (i=0 ; i<MAX_ARG_PAGES ; i++)	/* clear page-table */				// 清页，执行新的程序要有新的面貌
 		page[i]=0;
-	if (!(inode=namei(filename)))		/* get executables inode */
+	if (!(inode=namei(filename)))		/* get executables inode */			// 获取filename的inode
 		return -ENOENT;
-	argc = count(argv);
-	envc = count(envp);
+	argc = count(argv);														// argc
+	envc = count(envp);														// envc
 	
 restart_interp:
-	if (!S_ISREG(inode->i_mode)) {	/* must be regular file */
+	if (!S_ISREG(inode->i_mode)) {	/* must be regular file */				// 必须是常规文件
 		retval = -EACCES;
 		goto exec_error2;
 	}
-	i = inode->i_mode;
+	i = inode->i_mode;														// 权限咯
 	e_uid = (i & S_ISUID) ? inode->i_uid : current->euid;
 	e_gid = (i & S_ISGID) ? inode->i_gid : current->egid;
 	if (current->euid == inode->i_uid)
@@ -218,39 +218,39 @@ restart_interp:
 		retval = -ENOEXEC;
 		goto exec_error2;
 	}
-	if (!(bh = bread(inode->i_dev,inode->i_zone[0]))) {
+	if (!(bh = bread(inode->i_dev,inode->i_zone[0]))) {						// 读取inode对应的文件信息
 		retval = -EACCES;
 		goto exec_error2;
 	}
-	ex = *((struct exec *) bh->b_data);	/* read exec-header */
-	if ((bh->b_data[0] == '#') && (bh->b_data[1] == '!') && (!sh_bang)) {
+	ex = *((struct exec *) bh->b_data);	/* read exec-header */				// 读取执行文件的头信息
+	if ((bh->b_data[0] == '#') && (bh->b_data[1] == '!') && (!sh_bang)) {	// '#! /bin/sh'这样的才是脚本
 		/*
 		 * This section does the #! interpretation.
-		 * Sorta complicated, but hopefully it will work.  -TYT
+		 * Sorta complicated, but hopefully it will work.  -TYT				// 写内核的老哥求神佛了哈哈哈哈哈啊哈哈哈
 		 */
 
 		char buf[1023], *cp, *interp, *i_name, *i_arg;
 		unsigned long old_fs;
 
-		strncpy(buf, bh->b_data+2, 1022);
-		brelse(bh);
-		iput(inode);
-		buf[1022] = '\0';
-		if ((cp = strchr(buf, '\n'))) {
-			*cp = '\0';
-			for (cp = buf; (*cp == ' ') || (*cp == '\t'); cp++);
+		strncpy(buf, bh->b_data+2, 1022);									// 拷贝文件数据到buf
+		brelse(bh);															// 减少bh引用
+		iput(inode);														// 释放inode
+		buf[1022] = '\0';													// 加上字符串末尾符
+		if ((cp = strchr(buf, '\n'))) {										// 读取首行
+			*cp = '\0';														// 替换'\n'为末尾符'\0'
+			for (cp = buf; (*cp == ' ') || (*cp == '\t'); cp++);			// 过滤开头的空白
 		}
-		if (!cp || *cp == '\0') {
+		if (!cp || *cp == '\0') {											// 首行判空
 			retval = -ENOEXEC; /* No interpreter name found */
 			goto exec_error1;
 		}
-		interp = i_name = cp;
+		interp = i_name = cp;												
 		i_arg = 0;
-		for ( ; *cp && (*cp != ' ') && (*cp != '\t'); cp++) {
+		for ( ; *cp && (*cp != ' ') && (*cp != '\t'); cp++) {				// 找到'/', 取/sh
  			if (*cp == '/')
 				i_name = cp+1;
 		}
-		if (*cp) {
+		if (*cp) {															
 			*cp++ = '\0';
 			i_arg = cp;
 		}
@@ -258,7 +258,7 @@ restart_interp:
 		 * OK, we've parsed out the interpreter name and
 		 * (optional) argument.
 		 */
-		if (sh_bang++ == 0) {
+		if (sh_bang++ == 0) {												// 处理参数和环境变量，注意sh_bang = 1了
 			p = copy_strings(envc, envp, page, p, 0);
 			p = copy_strings(--argc, argv+1, page, p, 0);
 		}
@@ -285,18 +285,18 @@ restart_interp:
 		/*
 		 * OK, now restart the process with the interpreter's inode.
 		 */
-		old_fs = get_fs();
-		set_fs(get_ds());
-		if (!(inode=namei(interp))) { /* get executables inode */
-			set_fs(old_fs);
+		old_fs = get_fs();													// 保存fs
+		set_fs(get_ds());													// 利用get_ds()刷新访问限制到4GB
+		if (!(inode=namei(interp))) { /* get executables inode */			// 取/bin/sh
+			set_fs(old_fs);													// 读写不管结果如何都要恢复fs
 			retval = -ENOENT;
 			goto exec_error1;
 		}
-		set_fs(old_fs);
+		set_fs(old_fs);														// 恢复了fs
 		goto restart_interp;
 	}
-	brelse(bh);
-	if (N_MAGIC(ex) != ZMAGIC || ex.a_trsize || ex.a_drsize ||
+	brelse(bh);																// 读取完文件头，再次循环就会来这里
+	if (N_MAGIC(ex) != ZMAGIC || ex.a_trsize || ex.a_drsize ||				// 这里开始判断文件MAGIC
 		ex.a_text+ex.a_data+ex.a_bss>0x3000000 ||
 		inode->i_size < ex.a_text+ex.a_data+ex.a_syms+N_TXTOFF(ex)) {
 		retval = -ENOEXEC;
@@ -307,7 +307,7 @@ restart_interp:
 		retval = -ENOEXEC;
 		goto exec_error2;
 	}
-	if (!sh_bang) {
+	if (!sh_bang) {															// 已经处理好环境变量和参数了，不会跑进这里面的
 		p = copy_strings(envc,envp,page,p,0);
 		p = copy_strings(argc,argv,page,p,0);
 		if (!p) {
@@ -316,33 +316,33 @@ restart_interp:
 		}
 	}
 /* OK, This is the point of no return */
-	if (current->executable)
+	if (current->executable)												// 判断是否为可执行文件
 		iput(current->executable);
-	current->executable = inode;
-	for (i=0 ; i<32 ; i++)
+	current->executable = inode;											// 初始化
+	for (i=0 ; i<32 ; i++)													// 清空信号处理结构
 		current->sigaction[i].sa_handler = NULL;
-	for (i=0 ; i<NR_OPEN ; i++)
-		if ((current->close_on_exec>>i)&1)
+	for (i=0 ; i<NR_OPEN ; i++)												// 如果有close_on_exec标识的文件，也要关闭
+		if ((current->close_on_exec>>i)&1)									// 这个可以处理父子进程共享文件描述符的问题
 			sys_close(i);
-	current->close_on_exec = 0;
-	free_page_tables(get_base(current->ldt[1]),get_limit(0x0f));
-	free_page_tables(get_base(current->ldt[2]),get_limit(0x17));
-	if (last_task_used_math == current)
+	current->close_on_exec = 0;												// close_on_exec没了，所以还要fork的话还得置位
+	free_page_tables(get_base(current->ldt[1]),get_limit(0x0f));			// 清空页
+	free_page_tables(get_base(current->ldt[2]),get_limit(0x17));			// 清空页，也是与父进程解除了页关系
+	if (last_task_used_math == current)										// 将数学协程处理器的使用标识置零
 		last_task_used_math = NULL;
 	current->used_math = 0;
-	p += change_ldt(ex.a_text,page)-MAX_ARG_PAGES*PAGE_SIZE;
-	p = (unsigned long) create_tables((char *)p,argc,envc);
-	current->brk = ex.a_bss +
-		(current->end_data = ex.a_data +
-		(current->end_code = ex.a_text));
-	current->start_stack = p & 0xfffff000;
+	p += change_ldt(ex.a_text,page)-MAX_ARG_PAGES*PAGE_SIZE;				// 清空页之后，指针也要收回到起点那里
+	p = (unsigned long) create_tables((char *)p,argc,envc);					// 创建新的页表
+	current->brk = ex.a_bss +												// 重设brk = bss + .data + .text
+		(current->end_data = ex.a_data +									// 这里是可以看得出来linux进程的内存模型的
+		(current->end_code = ex.a_text));									
+	current->start_stack = p & 0xfffff000;									// 设置栈的位置2^16 = 64KB，现在的栈没这么小了
 	current->euid = e_uid;
 	current->egid = e_gid;
 	i = ex.a_text+ex.a_data;
-	while (i&0xfff)
+	while (i&0xfff)															// 初始化bss
 		put_fs_byte(0,(char *) (i++));
-	eip[0] = ex.a_entry;		/* eip, magic happens :-) */
-	eip[3] = p;			/* stack pointer */
+	eip[0] = ex.a_entry;		/* eip, magic happens :-) */				// magic
+	eip[3] = p;			/* stack pointer */									// 栈指针
 	return 0;
 exec_error2:
 	iput(inode);

@@ -189,31 +189,31 @@ int copy_page_tables(unsigned long from,unsigned long to,long size)
 }
 
 /*
- * This function puts a page in memory at the wanted address.
+ * This function puts a page in memory at the wanted address.		// 这个函数将一页数据打入指定地址
  * It returns the physical address of the page gotten, 0 if
  * out of memory (either when trying to access page-table or
  * page.)
  */
-unsigned long put_page(unsigned long page,unsigned long address)
+unsigned long put_page(unsigned long page,unsigned long address)	
 {
 	unsigned long tmp, *page_table;
 
 /* NOTE !!! This uses the fact that _pg_dir=0 */
 
-	if (page < LOW_MEM || page >= HIGH_MEMORY)
+	if (page < LOW_MEM || page >= HIGH_MEMORY)						// 如果页越界了，寄
 		printk("Trying to put page %p at %p\n",page,address);
-	if (mem_map[(page-LOW_MEM)>>12] != 1)
+	if (mem_map[(page-LOW_MEM)>>12] != 1)							// 内存映射
 		printk("mem_map disagrees with %p at %p\n",page,address);
-	page_table = (unsigned long *) ((address>>20) & 0xffc);
-	if ((*page_table)&1)
-		page_table = (unsigned long *) (0xfffff000 & *page_table);
+	page_table = (unsigned long *) ((address>>20) & 0xffc);			// 获取页表所对应的表项
+	if ((*page_table)&1)											// 如果页表有数据了
+		page_table = (unsigned long *) (0xfffff000 & *page_table);	// 直接拿到对应的页表地址
 	else {
-		if (!(tmp=get_free_page()))
+		if (!(tmp=get_free_page()))									// 表项为空就申请空页
 			return 0;
-		*page_table = tmp|7;
+		*page_table = tmp|7;										// 缓存该页内存
 		page_table = (unsigned long *) tmp;
 	}
-	page_table[(address>>12) & 0x3ff] = page | 7;
+	page_table[(address>>12) & 0x3ff] = page | 7;					// 把page打入表项
 /* no need for invalidate */
 	return page;
 }
@@ -364,7 +364,7 @@ static int share_page(unsigned long address)
 }
 
 void do_no_page(unsigned long error_code,unsigned long address)
-{
+{												// 缺页中断处理函数
 	int nr[4];
 	unsigned long tmp;
 	unsigned long page;
@@ -373,25 +373,25 @@ void do_no_page(unsigned long error_code,unsigned long address)
 	address &= 0xfffff000;
 	tmp = address - current->start_code;
 	if (!current->executable || tmp >= current->end_data) {
-		get_empty_page(address);
+		get_empty_page(address);				// 如果不是加载程序或者没地方了就再申请一个页
 		return;
-	}
-	if (share_page(tmp))
+	}											// 这里是加载shell中断的，也就是加载程序ing
+	if (share_page(tmp))						// 判断是否共享页，共享页就不需要搞了
 		return;
-	if (!(page = get_free_page()))
+	if (!(page = get_free_page()))				// 申请free内存
 		oom();
 /* remember that 1 block is used for header */
-	block = 1 + tmp/BLOCK_SIZE;
-	for (i=0 ; i<4 ; block++,i++)
+	block = 1 + tmp/BLOCK_SIZE;					// block会有1页用于header
+	for (i=0 ; i<4 ; block++,i++)				// 标记block
 		nr[i] = bmap(current->executable,block);
-	bread_page(page,current->executable->i_dev,nr);
-	i = tmp + 4096 - current->end_data;
+	bread_page(page,current->executable->i_dev,nr);		// 读取一页
+	i = tmp + 4096 - current->end_data;			// 读取一页后可能会超出内存
 	tmp = page + 4096;
-	while (i-- > 0) {
+	while (i-- > 0) {							// 超出多少，tmp就处理多少
 		tmp--;
 		*(char *)tmp = 0;
 	}
-	if (put_page(page,address))
+	if (put_page(page,address))					// 一页完整打入
 		return;
 	free_page(page);
 	oom();

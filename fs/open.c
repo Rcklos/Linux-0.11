@@ -194,16 +194,16 @@ int sys_close(unsigned int fd)
 {	
 	struct file * filp;
 
-	if (fd >= NR_OPEN)
+	if (fd >= NR_OPEN)						// 如果文件描述符越界，寄
 		return -EINVAL;
-	current->close_on_exec &= ~(1<<fd);
-	if (!(filp = current->filp[fd]))
+	current->close_on_exec &= ~(1<<fd);		// 设置当前需要关闭的文件描述符
+	if (!(filp = current->filp[fd]))		// 如果文件指针是空的，那关闭个啥
 		return -EINVAL;
-	current->filp[fd] = NULL;
-	if (filp->f_count == 0)
+	current->filp[fd] = NULL;				// 取消文件绑定
+	if (filp->f_count == 0)					// 如果文件已经没有引用了，系统寄
 		panic("Close: file count is 0");
-	if (--filp->f_count)
+	if (--filp->f_count)					// 减少引用
 		return (0);
-	iput(filp->f_inode);
+	iput(filp->f_inode);					// 如果引用到底了，释放文件inode
 	return (0);
 }

@@ -22,17 +22,17 @@ extern void write_verify(unsigned long address);
 
 long last_pid=0;
 
-void verify_area(void * addr,int size)
+void verify_area(void * addr,int size)				// 验证缓冲区
 {
 	unsigned long start;
 
-	start = (unsigned long) addr;
-	size += start & 0xfff;
+	start = (unsigned long) addr;					// 起始
+	size += start & 0xfff;							// 尺寸
 	start &= 0xfffff000;
 	start += get_base(current->ldt[2]);
 	while (size>0) {
 		size -= 4096;
-		write_verify(start);
+		write_verify(start);						// 通过尝试写入数据来验证
 		start += 4096;
 	}
 }

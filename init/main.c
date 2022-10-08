@@ -182,30 +182,33 @@ void init(void)
 		NR_BUFFERS*BLOCK_SIZE);
 	printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);
 	if (!(pid=fork())) {					// 到这里就要启动进程2了
-		close(0);							
-		if (open("/etc/rc",O_RDONLY,0))		
-			_exit(1);
-		execve("/bin/sh",argv_rc,envp_rc);
+		// fs/open.c
+		close(0);							// 进程2关闭输入
+		if (open("/etc/rc",O_RDONLY,0))		// 使用/etc/rc替换输入设备，加载一些开机需要执行的东西
+			_exit(1);						// 替换失败就寄了
+		// do_execve(fs/exec.c)
+		execve("/bin/sh",argv_rc,envp_rc);	// 执行shell，参数分别是shell执行参数(="NULL")其环境变量(="/")
+											// 由于输入已经改成了/etc/rc文件了，所以这里在运行/etc/rc的内容
 		_exit(2);
 	}
-	if (pid>0)
-		while (pid != wait(&i))
+	if (pid>0)								// 进程1暂停工作，等待子进程工作完成(子进程只有进程2)
+		while (pid != wait(&i))				// 暂不深入wait -> 补充: 进程2退出了，回到了这里，pid = 2
 			/* nothing */;
 	while (1) {
-		if ((pid=fork())<0) {
+		if ((pid=fork())<0) {				// 继续fork
 			printf("Fork failed in init\r\n");
 			continue;
 		}
-		if (!pid) {
-			close(0);close(1);close(2);
-			setsid();
-			(void) open("/dev/tty0",O_RDWR,0);
-			(void) dup(0);
-			(void) dup(0);
-			_exit(execve("/bin/sh",argv,envp));
+		if (!pid) {							// 新的子进程
+			close(0);close(1);close(2);		// 关闭了标准输入、标准输出、异常输出
+			setsid();						
+			(void) open("/dev/tty0",O_RDWR,0);	// 打开了tty0
+			(void) dup(0);						// 标准输入
+			(void) dup(0);						// 标准输出
+			_exit(execve("/bin/sh",argv,envp));	// 新进程打开sh，这里已经是用户可以控制的时候了
 		}
 		while (1)
-			if (pid == wait(&i))
+			if (pid == wait(&i))				// 进程1重新进入等待
 				break;
 		printf("\n\rchild %d died with code %04x\n\r",pid,i);
 		sync();
